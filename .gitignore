@@ -1,0 +1,31 @@
+# Asio library (large dependency)
+asio/
+
+# Compiled binaries
+*.exe
+*.out
+server
+myredis
+
+# Object files
+*.o
+*.obj
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE files
+.vscode/
+.vs/
+*.vcxproj*
+*.sln
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Build directories
+build/
+Debug/
+Release/
