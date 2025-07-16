@@ -5,10 +5,58 @@
 #include <vector>
 #include <sstream>
 #include <array>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
 
 using asio::ip::tcp;
 
 std::unordered_map<std::string, std::string> kvStore;
+std::chrono::steady_clock::time_point backupTime = std::chrono::steady_clock::now();
+
+void saveBackup() {
+    try {
+        // Create timestamp for backup filename
+        auto now = std::chrono::system_clock::now();
+        auto time_t_now = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << "backup_" << std::put_time(std::localtime(&time_t_now), "%Y%m%d_%H%M%S") << ".dat";
+        
+        std::ofstream backupFile(ss.str());
+        if (!backupFile.is_open()) {
+            std::cerr << "Failed to create backup file: " << ss.str() << std::endl;
+            return;
+        }
+        
+        // Save the number of key-value pairs
+        backupFile << kvStore.size() << "\n";
+        
+        // Save each key-value pair
+        for (const auto& pair : kvStore) {
+            backupFile << pair.first.length() << "\n" << pair.first << "\n";
+            backupFile << pair.second.length() << "\n" << pair.second << "\n";
+        }
+        
+        backupFile.close();
+        std::cout << "Backup saved to: " << ss.str() << " (" << kvStore.size() << " keys)" << std::endl;
+        
+        // Update backup time
+        backupTime = std::chrono::steady_clock::now();
+    } catch (const std::exception& e) {
+        std::cerr << "Error saving backup: " << e.what() << std::endl;
+    }
+}
+
+void checkAutoBackup() {
+    const auto backup_interval = std::chrono::minutes(5);
+    auto now = std::chrono::steady_clock::now();
+    
+    if (now - backupTime >= backup_interval && !kvStore.empty()) {
+        std::cout << "Performing automatic backup..." << std::endl;
+        saveBackup();
+    }
+}
 
 std::vector<std::string> parseRESP(const std::string& data){
     std::vector<std::string> result;
@@ -56,6 +104,11 @@ std::string handleCommand(const std::vector<std::string>& cmd){
         resp << "$" << it->second.size() << "\r\n" << it->second << "\r\n";
         return resp.str();
     }
+    if(cmd[0] == "BACKUP"){
+        if(cmd.size() != 1) return "-ERR wrong number of arguments for BACKUP\r\n";
+        saveBackup();
+        return "+OK backup saved\r\n";
+    }
 
     return "-ERR unknown command\r\n";
 }
@@ -79,6 +132,10 @@ class Session : public std::enable_shared_from_this<Session> {
                         std::string input(data_.data(), length);
                         auto cmd = parseRESP(input);
                         std::string response = handleCommand(cmd);
+                        
+                        // Check for automatic backup after processing command
+                        checkAutoBackup();
+                        
                         do_write(response);
                     }
                 }
@@ -127,9 +184,11 @@ class Server {
 int main(){
     try{
         asio::io_context io_context;
-        int port = 6379;
+        int port = 6380;  // Using port 6380 instead of 6379
         Server server(io_context, port);
         std::cout << "CacheDB listening on port " << port << std::endl;
+        std::cout << "Automatic backups will be created every 5 minutes when data is present" << std::endl;
+        std::cout << "Use the BACKUP command to manually create a backup" << std::endl;
         io_context.run();
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;

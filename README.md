@@ -41,7 +41,7 @@ After compilation, run the server:
 ./server
 ```
 
-The server will start listening on port 6379 (default Redis port).
+The server will start listening on port 6380 (alternative to the default Redis port 6379 to avoid conflicts).
 
 ## Supported Commands
 
@@ -53,8 +53,13 @@ The server will start listening on port 6379 (default Redis port).
 
 You can test the server using `redis-cli` or any Redis-compatible client:
 ```bash
-redis-cli -h 127.0.0.1 -p 6379
+redis-cli -h 127.0.0.1 -p 6380
 ```
+
+If you don't have redis-cli installed, you can download Redis for Windows from:
+https://github.com/microsoftarchive/redis/releases
+
+Alternatively, you can test using telnet or any TCP client by sending RESP protocol commands.
 
 ## Contributions
 You are welcome to send Issues and Pull Requests to this repository.
