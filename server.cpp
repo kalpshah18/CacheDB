@@ -48,8 +48,8 @@ void saveBackup() {
     }
 }
 
-void checkAutoBackup() {
-    const auto backup_interval = std::chrono::minutes(5);
+void checkAutoBackup(int backupInterval) {
+    const auto backup_interval = std::chrono::minutes(backupInterval);
     auto now = std::chrono::steady_clock::now();
     
     if (now - backupTime >= backup_interval && !kvStore.empty()) {
@@ -115,8 +115,8 @@ std::string handleCommand(const std::vector<std::string>& cmd){
 
 class Session : public std::enable_shared_from_this<Session> {
     public:
-        Session(tcp::socket socket)
-            : socket_(std::move(socket)) {}
+        Session(tcp::socket socket, int backupInterval)
+            : socket_(std::move(socket)), backupInterval_(backupInterval) {}
         
         void start(){
             do_read();
@@ -132,10 +132,7 @@ class Session : public std::enable_shared_from_this<Session> {
                         std::string input(data_.data(), length);
                         auto cmd = parseRESP(input);
                         std::string response = handleCommand(cmd);
-                        
-                        // Check for automatic backup after processing command
-                        checkAutoBackup();
-                        
+                        checkAutoBackup(backupInterval_);
                         do_write(response);
                     }
                 }
@@ -157,12 +154,13 @@ class Session : public std::enable_shared_from_this<Session> {
 
         tcp::socket socket_;
         std::array<char, 4096> data_;
+        int backupInterval_;
 };
 
 class Server {
     public:
-        Server(asio::io_context& io_context, short port)
-            : acceptor_(io_context, tcp::endpoint(tcp::v4(), port)){
+        Server(asio::io_context& io_context, short port, int backupInterval)
+            : acceptor_(io_context, tcp::endpoint(tcp::v4(), port)), backupInterval_(backupInterval){
                 do_accept();
             }
     
@@ -171,7 +169,7 @@ class Server {
                 acceptor_.async_accept(
                     [this](std::error_code ec, tcp::socket socket){
                         if(!ec){
-                            std::make_shared<Session>(std::move(socket))->start();
+                            std::make_shared<Session>(std::move(socket), backupInterval_)->start();
                         }
                         do_accept();
                     }
@@ -179,13 +177,15 @@ class Server {
             }
 
             tcp::acceptor acceptor_;
+            int backupInterval_;
 };
 
 int main(){
     try{
         asio::io_context io_context;
-        int port = 6380;  // Using port 6380 instead of 6379
-        Server server(io_context, port);
+        int backupInterval = 5;
+        int port = 6380;
+        Server server(io_context, port, backupInterval);
         std::cout << "CacheDB listening on port " << port << std::endl;
         std::cout << "Automatic backups will be created every 5 minutes when data is present" << std::endl;
         std::cout << "Use the BACKUP command to manually create a backup" << std::endl;
